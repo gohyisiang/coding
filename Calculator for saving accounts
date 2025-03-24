@@ -1,0 +1,228 @@
+#include <stdio.h>
+#include <math.h>
+
+// Function to calculate the balance after compound interest
+// P = principal, r = interest rate, n = compound frequency per year, t = time in years
+double calculate_balance(double P, double r, int n, int t)
+{
+    double base = 1 + r / n;
+    double exponent = n * t;
+    double balance = P * pow(base, exponent);
+    return round(balance * 100) / 100;
+}
+
+double calculate_principal(double B, double r, int n, int t)
+{
+    return B / pow((1 + r / n), n * t);
+}
+
+double calculate_rate(double B, double P, int n, int t)
+{
+    return n * (pow(B / P, 1.0 / (n * t)) - 1);
+}
+
+int calculate_compound_frequency(double B, double P, double r, int t)
+{
+    int n = 1;
+    while (1) {
+        double calculated_balance = P * pow(1 + r / n, n * t);
+
+        if (calculated_balance > B - 0.01 && calculated_balance < B + 0.01) {
+            return n;
+        }
+        n++;
+
+        if (n > 1000)
+        {
+            return 0;
+        }
+    }
+}
+
+double calculate_time(double B, double P, double r, int n)
+{
+    return log(B / P) / (n * log(1 + r / n));
+}
+
+void generate_yearly_report(double P, double r, int n, int start_year, int end_year)
+{
+    printf("\nYear\tPrincipal\tInterest Rate\tCompound Ratio\tBalance\n");
+    for (int year = start_year; year <= end_year; year++)
+    {
+        double balance = calculate_balance(P, r, n, year - start_year + 1);
+        printf("%d\t%.2f\t\t%.3f\t\t%d\t%.2f\n", year, P, r, n, balance);
+    }
+}
+
+void compare_accounts(double P, double r, int n1, int t1, int n2)
+{
+    // Calculate final balance of Account 1
+    double B1 = calculate_balance(P, r, n1, t1);
+    printf("Account 1 final balance: %.2f\n", B1);
+
+    // Initialize variables for Account 2 time calculation
+    int years = 0;
+    int months = 0;
+    double B2 = P;
+
+    // Loop to increase the time for Account 2 until the balance meets or exceeds B1
+    while (B2 < B1) {
+        // Calculate the balance for Account 2 at the current time
+        B2 = calculate_balance(P, r, n2, years + months / 12.0);
+
+        // Increment months and adjust years as needed
+        months++;
+        if (months == 12) {
+            months = 0;
+            years++;
+        }
+    }
+
+    // Print the result
+    printf("\nIt would take %d years and %d months for Account 2 to reach or exceed the balance of Account 1.\n", years, months);
+}
+
+
+void run_calculator() {
+    int option;
+    double P, r, B;
+    int n, t, start_year, end_year, n1, n2, t1;
+    char ch; // Declare ch to store the character for validation
+
+    while (1)
+    {
+        printf("\n--- Savings Account Calculator ---\n");
+        printf("1. Calculate Balance\n");
+        printf("2. Calculate Principal\n");
+        printf("3. Calculate Interest Rate\n");
+        printf("4. Calculate Compound Frequency\n");
+        printf("5. Calculate Time\n");
+        printf("6. Generate Yearly Report\n");
+        printf("7. Compare Two Accounts\n");
+        printf("0. Exit\n");
+
+        while (1) {
+            printf("Enter your option: ");
+            if (scanf("%d%c", &option, &ch) == 2 && ch == '\n')
+            {
+                if (option >= 0 && option <= 7)
+                {
+                    break;
+                }
+                else
+                {
+                    printf("Invalid input. Please enter an integer between 0 and 7.\n");
+                }
+            }
+            else
+            {
+                printf("Invalid input. Please enter an integer between 0 and 7, without any decimals.\n");
+                while (getchar() != '\n');
+            }
+        }
+
+        if (option == 1)
+        {
+            printf("Enter Principal: ");
+            scanf("%lf", &P);
+            printf("Enter Interest Rate (e.g. 0.05 for 5%%): ");
+            scanf("%lf", &r);
+            printf("Enter Compound Frequency: ");
+            scanf("%d", &n);
+            printf("Enter Time in years: ");
+            scanf("%d", &t);
+            B = calculate_balance(P, r, n, t);
+            printf("Calculated Balance: %.2lf\n", B);
+        }
+        else if (option == 2)
+        {
+            printf("Enter Balance: ");
+            scanf("%lf", &B);
+            printf("Enter Interest Rate (e.g. 0.05 for 5%%): ");
+            scanf("%lf", &r);
+            printf("Enter Compound Frequency: ");
+            scanf("%d", &n);
+            printf("Enter Time in years: ");
+            scanf("%d", &t);
+            P = calculate_principal(B, r, n, t);
+            printf("Calculated Principal: %.2lf\n", P);
+        }
+        else if (option == 3)
+        {
+            printf("Enter Balance: ");
+            scanf("%lf", &B);
+            printf("Enter Principal: ");
+            scanf("%lf", &P);
+            printf("Enter Compound Frequency: ");
+            scanf("%d", &n);
+            printf("Enter Time in years: ");
+            scanf("%d", &t);
+            r = calculate_rate(B, P, n, t);
+            printf("Calculated Interest Rate: %.2lf\n", r);
+        }
+        else if (option == 4)
+        {
+            printf("Enter Balance: ");
+            scanf("%lf", &B);
+            printf("Enter Principal: ");
+            scanf("%lf", &P);
+            printf("Enter Interest Rate (e.g. 0.05 for 5%%): ");
+            scanf("%lf", &r);
+            printf("Enter Time in years: ");
+            scanf("%d", &t);
+            n = calculate_compound_frequency(B, P, r, t);
+            printf("Calculated Compound Frequency: %d\n", n);
+        }
+        else if (option == 5)
+        {
+            printf("Enter Balance: ");
+            scanf("%lf", &B);
+            printf("Enter Principal: ");
+            scanf("%lf", &P);
+            printf("Enter Interest Rate (e.g. 0.05 for 5%%): ");
+            scanf("%lf", &r);
+            printf("Enter Compound Frequency: ");
+            scanf("%d", &n);
+            double t = calculate_time(B, P, r, n);
+            printf("Calculated Time (t): %.2lf years\n", t);
+        }
+
+        else if (option == 6)
+        {
+            printf("Enter Principal: ");
+            scanf("%lf", &P);
+            printf("Enter Interest Rate (e.g. 0.05 for 5%%): ");
+            scanf("%lf", &r);
+            printf("Enter Compound Frequency: ");
+            scanf("%d", &n);
+            printf("Enter Start Year: ");
+            scanf("%d", &start_year);
+            printf("Enter End Year: ");
+            scanf("%d", &end_year);
+            generate_yearly_report(P, r, n, start_year, end_year);
+        }
+        else if (option == 7)
+        {
+            printf("Enter Principal: ");
+            scanf("%lf", &P);
+            printf("Enter Interest Rate (e.g. 0.05 for 5%%): ");
+            scanf("%lf", &r);
+            printf("Enter Compound Frequency for Account 1: ");
+            scanf("%d", &n1);
+            printf("Enter Time in years for Account 1: ");
+            scanf("%d", &t1);
+            printf("Enter Compound Frequency for Account 2: ");
+            scanf("%d", &n2);
+            compare_accounts(P, r, n1, t1, n2);
+        }
+        else if (option == 0)
+        {
+            printf("Exiting program.\n");
+            break;
+        }
+        else
+        {
+            printf("Invalid option. Please try again.\n");
+        }
+    }
+}
