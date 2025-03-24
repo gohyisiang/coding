@@ -1,0 +1,306 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef struct {
+    char type[10];           // Circuit type (SERIES or PARALLEL)
+    int start_node;          // Start node of the circuit
+    int end_node;            // End node of the circuit
+    double voltage;          // Voltage source value
+    int num_resistors;       // Number of resistors in the circuit
+    double *resistances;     // Array of resistor values
+} Circuit;
+
+void to_uppercase(char *str) {
+    for (int i = 0; str[i] != '\0'; i++) {
+        if (str[i] >= 'a' && str[i] <= 'z') {
+            str[i] -= 32; // Convert lowercase to uppercase
+        }
+    }
+}
+
+void create_circuit(Circuit *circuit, int *is_created) {
+    printf("Enter circuit type (SERIES or PARALLEL): ");
+    scanf("%s", circuit->type);
+    to_uppercase(circuit->type);
+
+    if (strcmp(circuit->type, "SERIES") != 0 && strcmp(circuit->type, "PARALLEL") != 0) {
+        printf("Invalid circuit type. Please enter either SERIES or PARALLEL.\n");
+        return;
+    }
+
+    printf("Enter start node: ");
+    scanf("%d", &circuit->start_node);
+
+    printf("Enter end node: ");
+    scanf("%d", &circuit->end_node);
+
+    printf("Enter voltage source value: ");
+    scanf("%lf", &circuit->voltage);
+    if (circuit->voltage <= 0) {
+        printf("Voltage must be a positive value.\n");
+        return;
+    }
+
+    printf("Enter number of resistors: ");
+    scanf("%d", &circuit->num_resistors);
+    if (circuit->num_resistors <= 0) {
+        printf("Number of resistors must be greater than zero.\n");
+        return;
+    }
+
+    circuit->resistances = (double *)malloc(circuit->num_resistors * sizeof(double));
+    if (circuit->resistances == NULL) {
+        perror("Memory allocation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < circuit->num_resistors; i++) {
+        printf("Enter resistance value for resistor %d: ", i + 1);
+        scanf("%lf", &circuit->resistances[i]);
+        if (circuit->resistances[i] <= 0) {
+            printf("Resistance must be a positive value.\n");
+            free(circuit->resistances); // Free allocated memory
+            return;
+        }
+    }
+
+    *is_created = 1; // Mark the circuit as created
+    printf("Your circuit is created!\n");
+}
+
+// Save the current circuit to a file
+void save_circuit(const Circuit *circuit, const char *filename, int is_created) {
+    if (!is_created) {
+        printf("No circuit to save. Create or load a circuit first.\n");
+        return;
+    }
+
+    if (filename == NULL || strlen(filename) == 0) {
+        printf("Invalid filename provided.\n");
+        return;
+    }
+
+    // Append ".cir" to the filename
+    char full_filename[256];
+    snprintf(full_filename, sizeof(full_filename), "%s.cir", filename);
+
+    FILE *file = fopen(full_filename, "w");
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+
+    // Begin the circuit description
+    fprintf(file, "START\n");
+    fprintf(file, "%s\n", circuit->type); // SERIES or PARALLEL
+
+    // Print the voltage source information using start_node and end_node
+    fprintf(file, "V_1 %d %d DC %.2lf ; %.2lf volts DC voltage source from node %d to node %d\n",
+            circuit->start_node, circuit->end_node, circuit->voltage, circuit->voltage,
+            circuit->start_node, circuit->end_node);
+
+    // Print resistors information
+    if (strcmp(circuit->type, "SERIES") == 0) {
+        for (int i = 0; i < circuit->num_resistors; i++) {
+            fprintf(file, "R%d %d %d %.2lf ; %.2lf ohm resistor named R%d from node %d to node %d\n",
+                    i + 1, circuit->start_node + i, circuit->start_node + i + 1, circuit->resistances[i],
+                    circuit->resistances[i], i + 1, circuit->start_node + i, circuit->start_node + i + 1);
+        }
+    } else if (strcmp(circuit->type, "PARALLEL") == 0) {
+        for (int i = 0; i < circuit->num_resistors; i++) {
+            fprintf(file, "R%d %d %d %.2lf ; %.2lf ohm resistor named R%d from node %d to node %d\n",
+                    i + 1, circuit->start_node, circuit->end_node, circuit->resistances[i],
+                    circuit->resistances[i], i + 1, circuit->start_node, circuit->end_node);
+        }
+    }
+
+    // End the circuit description
+    fprintf(file, "END\n");
+
+    fclose(file);
+
+    // Record the filename in filelist.txt
+    FILE *filelist = fopen("filelist.txt", "a");
+    if (filelist == NULL) {
+        perror("Error opening filelist");
+        return;
+    }
+    fprintf(filelist, "%s\n", full_filename);
+    fclose(filelist);
+
+    printf("Circuit saved successfully to %s.\n", full_filename);
+}
+
+// Function to check if a file exists
+int file_exists(const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file) {
+        fclose(file);
+        return 1;
+    }
+    return 0;
+}
+
+// Function to remove duplicates from filelist.txt
+void remove_duplicates(char filenames[][256], int *file_count) {
+    for (int i = 0; i < *file_count; i++) {
+        for (int j = i + 1; j < *file_count; j++) {
+            if (strcmp(filenames[i], filenames[j]) == 0) {
+                // Shift all elements to the left
+                for (int k = j; k < *file_count - 1; k++) {
+                    strcpy(filenames[k], filenames[k + 1]);
+                }
+                (*file_count)--;
+                j--; // Check the new element at position j
+            }
+        }
+    }
+}
+
+void load_circuit(Circuit *circuit, int *is_created) {
+    FILE *filelist = fopen("filelist.txt", "r");
+    if (filelist == NULL) {
+        printf("No saved files found.\n");
+        return;
+    }
+
+    char filenames[100][256];
+    int file_count = 0;
+
+    // Read file names from filelist.txt
+    while (fgets(filenames[file_count], sizeof(filenames[file_count]), filelist)) {
+        // Remove newline character
+        filenames[file_count][strcspn(filenames[file_count], "\n")] = 0;
+        // Check if the file exists
+        if (file_exists(filenames[file_count])) {
+            file_count++;
+        }
+    }
+    fclose(filelist);
+
+     // Remove duplicates
+    remove_duplicates(filenames, &file_count);
+
+    // Rewrite filelist.txt with only existing files
+    filelist = fopen("filelist.txt", "w");
+    for (int i = 0; i < file_count; i++) {
+        fprintf(filelist, "%s\n", filenames[i]);
+    }
+    fclose(filelist);
+
+    if (file_count == 0) {
+        printf("No saved files found.\n");
+        return;
+    }
+
+    // Display the list of saved files
+    printf("Available saved files:\n");
+    for (int i = 0; i < file_count; i++) {
+        printf("%d. %s\n", i + 1, filenames[i]);
+    }
+
+    // Let the user choose a file
+    int choice;
+    printf("Enter the number of the file to load: ");
+    scanf("%d", &choice);
+
+    if (choice < 1 || choice > file_count) {
+        printf("Invalid choice. Please select a valid file number.\n");
+        return;
+    }
+
+    // Load the selected file
+    FILE *file = fopen(filenames[choice - 1], "r");
+    if (file == NULL) {
+        perror("Error opening file");
+        return;
+    }
+
+    // Parse the file contents
+    char line[256];
+    fgets(line, sizeof(line), file); // Skip "Circuit Type: "
+    sscanf(line + strlen("Circuit Type: "), "%s", circuit->type);
+
+    fgets(line, sizeof(line), file); // Skip "Voltage Source: "
+    sscanf(line + strlen("Voltage Source: "), "%lf", &circuit->voltage);
+
+    fgets(line, sizeof(line), file); // Skip "Number of Resistors: "
+    sscanf(line + strlen("Number of Resistors: "), "%d", &circuit->num_resistors);
+
+    // Allocate memory for resistances
+    circuit->resistances = (double *)malloc(circuit->num_resistors * sizeof(double));
+    if (circuit->resistances == NULL) {
+        perror("Memory allocation failed");
+        fclose(file);
+        return;
+    }
+
+    for (int i = 0; i < circuit->num_resistors; i++) {
+        fgets(line, sizeof(line), file); // Read resistor values
+        sscanf(line + strlen("Resistor X: "), "%lf", &circuit->resistances[i]);
+    }
+
+    fclose(file);
+    *is_created = 1; // Mark the circuit as loaded
+    printf("Circuit loaded successfully from %s.\n", filenames[choice - 1]);
+}
+
+// Analyze the circuit and print a report
+void analyze_circuit(const Circuit *circuit, int is_created) {
+    if (!is_created) {
+        printf("No circuit to analyze. Create or load a circuit first.\n");
+        return;
+    }
+
+    double total_resistance = 0.0;
+    double total_current = 0.0;
+
+    if (strcmp(circuit->type, "SERIES") == 0) {
+        for (int i = 0; i < circuit->num_resistors; i++) {
+            total_resistance += circuit->resistances[i];
+        }
+        total_current = circuit->voltage / total_resistance;
+
+        printf("+----------------+----------------+----------------+\n");
+        printf("| Resistor Index | Voltage (V)    | Power (W)      |\n");
+        printf("+----------------+----------------+----------------+\n");
+
+        for (int i = 0; i < circuit->num_resistors; i++) {
+            double voltage = total_current * circuit->resistances[i];
+            double power = voltage * total_current;
+            printf("| %14d | %14.2lf | %14.2lf |\n", i + 1, voltage, power);
+        }
+        printf("+----------------+----------------+----------------+\n");
+        printf("Total Resistance: %.2lf ohms\n", total_resistance);
+        printf("Total Current: %.2lf A\n", total_current);
+
+    } else if (strcmp(circuit->type, "PARALLEL") == 0) {
+        for (int i = 0; i < circuit->num_resistors; i++) {
+            total_resistance += 1.0 / circuit->resistances[i];
+        }
+        total_resistance = 1.0 / total_resistance;
+        total_current = circuit->voltage / total_resistance;
+
+        printf("+----------------+----------------+----------------+\n");
+        printf("| Resistor Index | Current (A)    | Power (W)      |\n");
+        printf("+----------------+----------------+----------------+\n");
+
+        for (int i = 0; i < circuit->num_resistors; i++) {
+            double current = circuit->voltage / circuit->resistances[i];
+            double power = circuit->voltage * current;
+            printf("| %14d | %14.2lf | %14.2lf |\n", i + 1, current, power);
+        }
+        printf("+----------------+----------------+----------------+\n");
+        printf("Total Resistance: %.2lf ohms\n", total_resistance);
+        printf("Total Current: %.2lf A\n", total_current);
+    }
+}
+
+// Free allocated memory
+void free_circuit(Circuit *circuit) {
+    if (circuit->resistances != NULL) {
+        free(circuit->resistances);
+        circuit->resistances = NULL;
+    }
+}
